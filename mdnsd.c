@@ -1,6 +1,7 @@
 #include "mdnsd.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
 
 // size of query/publish hashes
 #define SPRIME 108
@@ -292,7 +293,7 @@ void _cache(mdnsd d, struct resource *r)
         while(c = _c_next(d,c,r->name,r->type)) c->rr.ttl = 0;
         _c_expire(d,&d->cache[i]);
     }
-    
+
     if(r->ttl == 0)
     { // process deletes
         while(c = _c_next(d,c,r->name,r->type))
@@ -468,7 +469,7 @@ int mdnsd_out(mdnsd d, struct message *m, unsigned long int *ip, unsigned short 
     *ip = inet_addr("224.0.0.251");
     m->header.qr = 1;
     m->header.aa = 1;
-    
+
     if(d->uanswers)
     { // send out individual unicast answers
         struct unicast *u = d->uanswers;
@@ -621,7 +622,7 @@ struct timeval *mdnsd_sleep(mdnsd d)
     if(d->uanswers || d->a_now) return &d->sleep;
 
     gettimeofday(&d->now,0);
-    
+
     if(d->a_pause)
     { // then check for paused answers
         if((usec = _tvdiff(d->now,d->pause)) > 0) d->sleep.tv_usec = usec;
@@ -758,4 +759,3 @@ void mdnsd_set_srv(mdnsd d, mdnsdr r, int priority, int weight, int port, char *
     r->rr.srv.port = port;
     mdnsd_set_host(d,r,name);
 }
-

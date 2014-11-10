@@ -10,7 +10,6 @@
 #include <stdlib.h>
 
 #include "mdnsd.h"
-#include "sdtxt.h"
 
 // conflict!
 void con(char *name, int type, void *arg)
@@ -69,22 +68,23 @@ int main(int argc, char *argv[])
     mdnsdr r;
     struct message m;
     struct in_addr ip;
-    unsigned short int port;
     struct timeval *tv;
     int bsize, ssize = sizeof(struct sockaddr_in);
     unsigned char buf[MAX_PACKET_LEN];
     struct sockaddr_in from, to;
     fd_set fds;
     int s;
-    unsigned char *packet, hlocal[256], nlocal[256];
+    unsigned char hlocal[256], nlocal[256], name[128];
     int len = 0;
-    xht h;
 
-    if(argc < 4) { printf("usage: mhttp 'unique name' 12.34.56.78 80 '/optionalpath'\n"); return; }
+    char *type = "_posterminal._tcp";
+    char *ip_str = "192.168.1.1";
+    unsigned short int port = 8444;
 
-    ip.s_addr = inet_addr(argv[2]);
-    port = atoi(argv[3]);
-    printf("Announcing .local site named '%s' to %s:%d and extra path '%s'\n",argv[1],inet_ntoa(ip),port,argv[4]);
+    ip.s_addr = inet_addr(ip_str);
+
+    sprintf(name, "verifone");
+    printf("Announcing .local site named '%s' to %s:%d\n",name,inet_ntoa(ip),port);
 
     signal(SIGINT,done);
     signal(SIGHUP,done);
@@ -94,21 +94,23 @@ int main(int argc, char *argv[])
     _d = d = mdnsd_new(QCLASS_IN,1000);
     if((s = msock()) == 0) { printf("can't create socket: %s\n",strerror(errno)); return 1; }
 
-    sprintf(hlocal,"%s._http._tcp.local.",argv[1]);
-    sprintf(nlocal,"http-%s.local.",argv[1]);
-    r = mdnsd_shared(d,"_http._tcp.local.",QTYPE_PTR,120);
+    sprintf(hlocal,"%s.%s.local.", name, type);
+    sprintf(nlocal,"%s.pos.local.", ip_str);
+
+    r = mdnsd_shared(d,"_posterminal._tcp.local.", QTYPE_PTR, 120);
     mdnsd_set_host(d,r,hlocal);
+
     r = mdnsd_unique(d,hlocal,QTYPE_SRV,600,con,0);
     mdnsd_set_srv(d,r,0,0,port,nlocal);
+
     r = mdnsd_unique(d,nlocal,QTYPE_A,600,con,0);
     mdnsd_set_raw(d,r,(unsigned char *)&ip,4);
+
+    // Need TXT, othervise resolving will not work
     r = mdnsd_unique(d,hlocal,QTYPE_TXT,600,con,0);
-    h = xht_new(11);
-    if(argc == 5 && argv[4] && strlen(argv[4]) > 0) xht_set(h,"path",argv[4]);
-    packet = sd2txt(h, &len);
-    xht_free(h);
-    mdnsd_set_raw(d,r,packet,len);
-    free(packet);
+    mdnsd_set_raw(d,r,NULL,0);
+
+    printf("Starting loop\n");
 
     while(1)
     {
@@ -129,7 +131,10 @@ int main(int argc, char *argv[])
                 message_parse(&m,buf);
                 mdnsd_in(d,&m,(unsigned long int)from.sin_addr.s_addr,from.sin_port);
             }
-            if(bsize < 0 && errno != EAGAIN) { printf("can't read from socket %d: %s\n",errno,strerror(errno)); return 1; }
+            if(bsize < 0 && errno != EAGAIN) {
+              printf("can't read from socket %d: %s\n",errno,strerror(errno));
+              return 1;
+            }
         }
         while(mdnsd_out(d,&m,(long unsigned int*)&ip.s_addr,&port))
         {
@@ -137,7 +142,12 @@ int main(int argc, char *argv[])
             to.sin_family = AF_INET;
             to.sin_port = port;
             to.sin_addr.s_addr = ip.s_addr;
-            if(sendto(s,message_packet(&m),message_packet_len(&m),0,(struct sockaddr *)&to,sizeof(struct sockaddr_in)) != message_packet_len(&m))  { printf("can't write to socket: %s\n",strerror(errno)); return 1; }
+
+            ssize_t sent_size = sendto(s,message_packet(&m),message_packet_len(&m),0,(struct sockaddr *)&to,sizeof(struct sockaddr_in));
+            if(sent_size != message_packet_len(&m))  {
+              printf("can't write to socket: %s\n",strerror(errno));
+              return 1;
+            }
         }
         if(_shutdown) break;
     }

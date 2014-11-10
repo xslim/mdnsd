@@ -1,6 +1,6 @@
 #include "xht.h"
 
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct xhn_struct
@@ -18,7 +18,7 @@ struct xht_struct
 };
 
 /* Generates a hash code for a string.
- * This function uses the ELF hashing algorithm as reprinted in 
+ * This function uses the ELF hashing algorithm as reprinted in
  * Andrew Binstock, "Hashing Rehashed," Dr. Dobb's Journal, April 1996.
  */
 int _xhter(const char *s)
@@ -93,6 +93,8 @@ xhn _xht_set(xht h, const char *key, void *val, char flag)
     n->flag = flag;
     n->key = key;
     n->val = val;
+
+    return NULL;
 }
 
 void xht_set(xht h, const char *key, void *val)
@@ -167,4 +169,3 @@ void xht_walk(xht h, xht_walker w, void *arg)
             if(n->key != 0 && n->val != 0)
                 (*w)(h, n->key, n->val, arg);
 }
-
